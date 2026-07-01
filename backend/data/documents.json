@@ -1,0 +1,42 @@
+[
+  {
+    "filename": "test.txt",
+    "file_type": "txt",
+    "chunks_created": 1,
+    "uploaded_at": "2026-06-30 07:24:06.624368"
+  },
+  {
+    "filename": "small.pdf",
+    "file_type": "pdf",
+    "chunks_created": 1,
+    "uploaded_at": "2026-06-30 07:25:12.528140"
+  },
+  {
+    "filename": "multi.pdf",
+    "file_type": "pdf",
+    "chunks_created": 1,
+    "uploaded_at": "2026-06-30 07:25:12.554212"
+  },
+  {
+    "filename": "test2.txt",
+    "file_type": "txt",
+    "chunks_created": 1,
+    "uploaded_at": "2026-06-30 07:25:12.627013"
+  },
+  {
+    "filename": "Universal_Context_Engine_Test_Document.pdf",
+    "file_type": "pdf",
+    "chunks_created": 2,
+    "uploaded_at": "2026-06-30 07:37:19.062126"
+  },
+  {
+    "id": "6a05cecf-bacd-4849-8b91-3efef9c0377f",
+    "filename": "proj_test.txt",
+    "file_type": "txt",
+    "file_size": 191,
+    "file_size_readable": "191 Bytes",
+    "chunks_created": 1,
+    "uploaded_at": "30 Jun 2026, 10:42 AM",
+    "status": "Processed"
+  }
+]

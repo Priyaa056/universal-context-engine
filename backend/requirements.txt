@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-dotenv
+pydantic
+python-multipart
+pypdf
+
+# Phase 3 — Module 1: Embedding Provider Architecture
+sentence-transformers
+torch
+numpy
+
+# Phase 3 — Module 2: ChromaDB Vector Storage
+chromadb
