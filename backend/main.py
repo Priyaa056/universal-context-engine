@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.kb import router as kb_router
+from api.retrieval import router as retrieval_router
 from config import get_settings
 
 settings = get_settings()
@@ -23,6 +24,7 @@ app.add_middleware(
 )
 
 app.include_router(kb_router)
+app.include_router(retrieval_router)
 
 
 def _configure_logging() -> None:

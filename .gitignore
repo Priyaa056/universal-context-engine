@@ -6,5 +6,6 @@ __pycache__/
 node_modules/
 .next/
 chroma_db/
+backend/data/chroma/
 uploads/
 .DS_Store

@@ -19,6 +19,8 @@ class DocumentSummary(BaseModel):
     file_size: int
     file_size_readable: str
     chunks_created: int
+    indexed_chunks: int | None = None
+    indexing_status: str | None = None
     uploaded_at: str
     status: str
 
@@ -45,6 +47,30 @@ class ErrorResponse(BaseModel):
     status: str = "error"
     message: str
     details: str
+
+
+class RetrievalRequest(BaseModel):
+    question: str
+    top_k: int = 5
+
+
+class RetrievalResult(BaseModel):
+    document_name: str
+    chunk_index: int
+    score: float
+    text: str
+
+
+class RetrievalResponse(BaseModel):
+    results: list[RetrievalResult]
+
+
+class RetrievalHealthResponse(BaseModel):
+    status: str
+    embedding_service: str
+    vector_store: str
+    retriever: str
+    details: str | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,10 @@ from fastapi import UploadFile
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError, PdfStreamError
 
+from config import get_settings
 from models.schemas import ChunkRecord, DocumentMetadata, DocumentSummary
+from rag.embedding_service import EmbeddingService
+from rag.vector_store import VectorStore
 from services.chunking_service import chunk_text
 from services.formatting_service import format_file_size, format_uploaded_at, now_utc
 from services.metadata_service import generate_document_id
@@ -183,6 +186,42 @@ def _cleanup_upload(file_path: Path) -> None:
         logger.info("Removed failed upload: %s", file_path.name)
 
 
+def _index_chunks_in_vector_store(
+    document_id: str,
+    filename: str,
+    file_type: str,
+    chunks: list[str],
+    upload_time: str,
+) -> tuple[int, str]:
+    try:
+        settings = get_settings()
+        embedding_service = EmbeddingService(
+            provider_name=settings.EMBEDDING_PROVIDER,
+            model_name=settings.EMBEDDING_MODEL_NAME,
+        )
+        vector_store = VectorStore(persist_directory=settings.CHROMA_PERSIST_DIR)
+        embeddings = embedding_service.embed_documents(chunks)
+
+        ids = [f"{document_id}_chunk_{index}" for index in range(len(chunks))]
+        metadatas = [
+            {
+                "document_id": document_id,
+                "filename": filename,
+                "file_type": file_type,
+                "chunk_index": index,
+                "upload_time": upload_time,
+            }
+            for index in range(len(chunks))
+        ]
+
+        vector_store.add_documents(ids=ids, embeddings=embeddings, documents=chunks, metadatas=metadatas)
+        logger.info("Indexed %d chunks into ChromaDB for %s", len(chunks), filename)
+        return len(chunks), "indexed"
+    except Exception as exc:
+        logger.exception("Vector indexing failed for %s", filename)
+        return 0, "indexing_failed"
+
+
 def list_documents() -> list[DocumentSummary]:
     _ensure_directories()
     documents = _load_json(DOCUMENTS_FILE, [])
@@ -289,11 +328,27 @@ async def process_upload(file: UploadFile) -> DocumentSummary:
     all_chunks.extend(chunk_records)
     _save_json(CHUNKS_FILE, all_chunks)
 
+    indexed_chunks, indexing_status = _index_chunks_in_vector_store(
+        document_id=document_id,
+        filename=filename,
+        file_type=file_type,
+        chunks=chunks,
+        upload_time=format_uploaded_at(uploaded_at_dt),
+    )
+
+    if indexing_status == "indexing_failed":
+        logger.warning(
+            "Document uploaded and chunked, but vector indexing failed for %s",
+            metadata.filename,
+        )
+
     logger.info(
-        "Upload complete: %s, type=%s, chunks=%d",
+        "Upload complete: %s, type=%s, chunks=%d, indexed=%d, status=%s",
         metadata.filename,
         metadata.file_type,
         metadata.chunks_created,
+        indexed_chunks,
+        indexing_status,
     )
 
     return DocumentSummary(
@@ -303,6 +358,8 @@ async def process_upload(file: UploadFile) -> DocumentSummary:
         file_size=metadata.file_size,
         file_size_readable=metadata.file_size_readable,
         chunks_created=metadata.chunks_created,
+        indexed_chunks=indexed_chunks,
+        indexing_status=indexing_status,
         uploaded_at=metadata.uploaded_at,
         status=metadata.status,
     )
