@@ -24,3 +24,33 @@ class ContextObject:
     question: str
     chunks: List[ContextChunk] = field(default_factory=list)
     statistics: ContextStatistics = field(default_factory=lambda: ContextStatistics(0, 0, 0, 0))
+
+
+@dataclass(frozen=True)
+class RankingStatistics:
+    chunks_received: int
+    chunks_ranked: int
+    strategy_used: str
+
+
+@dataclass(frozen=True)
+class RankedContext:
+    chunks: List[ContextChunk] = field(default_factory=list)
+    statistics: RankingStatistics = field(default_factory=lambda: RankingStatistics(0, 0, ""))
+
+@dataclass(frozen=True)
+class SourceInfo:
+    document_id: str
+    filename: str
+    chunk_index: int
+    score: float
+
+
+@dataclass(frozen=True)
+class FormattedContext:
+    question: str
+    context_text: str
+    sources: List[SourceInfo] = field(default_factory=list)
+    statistics: ContextStatistics = field(
+        default_factory=lambda: ContextStatistics(0, 0, 0, 0)
+    )
