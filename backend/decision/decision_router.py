@@ -1,5 +1,8 @@
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
+
+from mcp.executor import ToolExecutor
 
 from .models import DecisionResult, IntentType
 
@@ -21,8 +24,11 @@ class RouteResult:
 class DecisionRouter:
     """
     Routes a decision to the correct downstream pipeline.
-    It does not execute tools or generate answers.
+    It does not generate answers directly.
     """
+
+    def __init__(self, executor: Optional[ToolExecutor] = None):
+        self.executor = executor
 
     def route(self, decision: DecisionResult) -> RouteResult:
         if decision is None:
@@ -54,3 +60,9 @@ class DecisionRouter:
             decision=decision,
             reason="Decision can be handled by answer pipeline.",
         )
+
+    def execute_tool(self, tool_input):
+        if self.executor is None:
+            raise RuntimeError("ToolExecutor has not been configured.")
+
+        return self.executor.execute(tool_input)
