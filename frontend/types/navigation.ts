@@ -1,8 +1,9 @@
 import {
   BookOpen,
-  LayoutDashboard,
-  MessageSquare,
-  Wrench,
+  Bot,
+  LayoutGrid,
+  PlugZap,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -14,23 +15,28 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   {
-    title: "Dashboard",
-    href: "/",
-    icon: LayoutDashboard,
+    title: "Workspace",
+    href: "/workspace",
+    icon: LayoutGrid,
   },
   {
-    title: "Knowledge Base",
+    title: "Knowledge Hub",
     href: "/knowledge-base",
     icon: BookOpen,
   },
   {
-    title: "Tools",
-    href: "/tools",
-    icon: Wrench,
+    title: "Alex AI",
+    href: "/chat",
+    icon: Bot,
   },
   {
-    title: "Chat",
-    href: "/chat",
-    icon: MessageSquare,
+    title: "Connected Apps",
+    href: "/tools",
+    icon: PlugZap,
+  },
+  {
+    title: "Settings",
+    href: "/settings",
+    icon: Settings,
   },
 ];
