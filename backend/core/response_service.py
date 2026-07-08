@@ -6,7 +6,7 @@ from context.models import FormattedContext
 
 
 class ResponseService:
-    def __init__(self, model_name: str = "gemini-2.0-flash"):
+    def __init__(self, model_name: str = "gemini-2.5-flash"):
         load_dotenv()
 
         api_key = os.getenv("GOOGLE_API_KEY")

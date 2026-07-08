@@ -239,6 +239,201 @@ def list_documents() -> list[DocumentSummary]:
         for doc in documents
     ]
 
+def delete_document(document_id: str) -> dict:
+    _ensure_directories()
+
+    documents = _load_json(DOCUMENTS_FILE, [])
+    chunks = _load_json(CHUNKS_FILE, [])
+
+    document = next(
+    (
+        doc for doc in documents
+        if doc.get("id") == document_id or doc.get("filename") == document_id
+    ),
+    None,
+    )
+
+    if document is None:
+        raise DocumentProcessingError(
+            message="Document not found.",
+            details=f"No document found with id '{document_id}'.",
+            status_code=404,
+        )
+
+    filename = document["filename"]
+
+    updated_documents = [
+    doc for doc in documents
+    if doc.get("id") != document_id and doc.get("filename") != document_id
+    ]
+
+    document_chunks = [
+    chunk for chunk in chunks
+    if chunk.get("document_id") == document_id or chunk.get("document_name") == filename
+    ]
+
+    updated_chunks = [
+    chunk for chunk in chunks
+    if chunk.get("document_id") != document_id and chunk.get("document_name") != filename
+    ]
+
+    _save_json(DOCUMENTS_FILE, updated_documents)
+    _save_json(CHUNKS_FILE, updated_chunks)
+
+    file_path = UPLOADS_DIR / filename
+    if file_path.exists():
+        file_path.unlink(missing_ok=True)
+
+    try:
+        settings = get_settings()
+        vector_store = VectorStore(persist_directory=settings.CHROMA_PERSIST_DIR)
+
+        vector_ids = [
+            f"{document_id}_chunk_{chunk.get('chunk_index')}"
+            for chunk in document_chunks
+        ]
+
+        if vector_ids:
+            vector_store.collection.delete(ids=vector_ids)
+
+    except Exception as exc:
+        logger.warning("Vector cleanup failed for %s: %s", filename, exc)
+
+    return {
+        "message": "Document deleted successfully.",
+        "document_id": document_id,
+        "filename": filename,
+    }
+
+def get_document_details(document_id: str) -> dict:
+    _ensure_directories()
+
+    documents = _load_json(DOCUMENTS_FILE, [])
+    chunks = _load_json(CHUNKS_FILE, [])
+
+    document = next(
+        (
+            doc for doc in documents
+            if doc.get("id") == document_id or doc.get("filename") == document_id
+        ),
+        None,
+    )
+
+    if document is None:
+        raise DocumentProcessingError(
+            message="Document not found.",
+            details=f"No document found with id '{document_id}'.",
+            status_code=404,
+        )
+
+    filename = document["filename"]
+    document_chunks = [
+        chunk for chunk in chunks
+        if chunk.get("document_id") == document.get("id")
+        or chunk.get("document_name") == filename
+    ]
+
+    preview_text = "\n\n".join(
+        str(chunk.get("text", "")) for chunk in document_chunks[:3]
+    )
+
+    return {
+        "document": document,
+        "chunks": document_chunks,
+        "preview": preview_text[:2000],
+    }
+
+def get_document_file_path(document_id: str) -> Path:
+    _ensure_directories()
+
+    documents = _load_json(DOCUMENTS_FILE, [])
+
+    document = next(
+        (
+            doc for doc in documents
+            if doc.get("id") == document_id or doc.get("filename") == document_id
+        ),
+        None,
+    )
+
+    if document is None:
+        raise DocumentProcessingError(
+            message="Document not found.",
+            details=f"No document found with id '{document_id}'.",
+            status_code=404,
+        )
+
+    file_path = UPLOADS_DIR / document["filename"]
+
+    if not file_path.exists():
+        raise DocumentProcessingError(
+            message="File not found.",
+            details=f"Uploaded file '{document['filename']}' no longer exists.",
+            status_code=404,
+        )
+
+    return file_path
+
+def rename_document(document_id: str, new_filename: str) -> dict:
+    _ensure_directories()
+
+    documents = _load_json(DOCUMENTS_FILE, [])
+    chunks = _load_json(CHUNKS_FILE, [])
+
+    document = next(
+        (doc for doc in documents if doc.get("id") == document_id or doc.get("filename") == document_id),
+        None,
+    )
+
+    if document is None:
+        raise DocumentProcessingError("Document not found.", f"No document found with id '{document_id}'.", 404)
+
+    old_filename = document["filename"]
+    extension = Path(old_filename).suffix
+
+    if not new_filename.endswith(extension):
+        new_filename += extension
+
+    old_path = UPLOADS_DIR / old_filename
+    new_path = UPLOADS_DIR / new_filename
+
+    if new_path.exists():
+        raise DocumentProcessingError("Filename already exists.", f"{new_filename} already exists.", 400)
+
+    if old_path.exists():
+        old_path.rename(new_path)
+
+    document["filename"] = new_filename
+
+    for chunk in chunks:
+        if chunk.get("document_id") == document.get("id") or chunk.get("document_name") == old_filename:
+            chunk["document_name"] = new_filename
+
+    _save_json(DOCUMENTS_FILE, documents)
+    _save_json(CHUNKS_FILE, chunks)
+
+    return {
+        "message": "Document renamed successfully.",
+        "old_filename": old_filename,
+        "new_filename": new_filename,
+    }
+
+
+def search_documents(query: str) -> list[DocumentSummary]:
+    documents = list_documents()
+
+    if not query or not query.strip():
+        return documents
+
+    q = query.lower().strip()
+
+    return [
+        doc for doc in documents
+        if q in doc.filename.lower()
+        or q in doc.file_type.lower()
+        or q in doc.status.lower()
+        or q in doc.uploaded_at.lower()
+    ]
 
 async def process_upload(file: UploadFile) -> DocumentSummary:
     _ensure_directories()
