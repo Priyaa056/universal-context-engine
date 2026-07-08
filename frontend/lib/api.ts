@@ -12,7 +12,7 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE_URL}/kb/upload`, {
+  const response = await fetch(`${API_BASE_URL}lib/api.ts`, {
     method: "POST",
     body: formData,
   });
@@ -41,7 +41,7 @@ export async function uploadDocument(
 }
 
 export async function fetchDocuments(): Promise<DocumentsListResponse> {
-  const response = await fetch(`${API_BASE_URL}/kb/documents`, {
+  const response = await fetch(`${API_BASE_URL}/api/documents`, {
     cache: "no-store",
   });
 

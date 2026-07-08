@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
-  Clock3,
+  Download,
+  Eye,
   FileText,
   Loader2,
+  Pencil,
+  Search,
   Sparkles,
+  Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,11 +28,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import UploadZone from "./components/UploadZone";
 import { fetchDocuments, uploadDocument } from "@/lib/api";
 import type { DocumentSummary } from "@/types/document";
 
+const API_BASE = "http://127.0.0.1:8000";
 const ACCEPTED_TYPES = ".pdf,.txt";
 const ACCEPTED_EXTENSIONS = [".pdf", ".txt"];
+
+type DocumentDetails = {
+  document: DocumentSummary;
+  chunks: unknown[];
+  preview: string;
+};
 
 function isAcceptedFile(file: File): boolean {
   const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
@@ -37,32 +50,50 @@ function isAcceptedFile(file: File): boolean {
 
 export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [selectedDocument, setSelectedDocument] = useState<DocumentDetails | null>(null);
+  const [renameDocument, setRenameDocument] = useState<DocumentSummary | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleteDocumentItem, setDeleteDocumentItem] = useState<DocumentSummary | null>(null);
 
   const loadDocuments = useCallback(async () => {
+    setIsFetching(true);
+
     try {
-      const response = await fetchDocuments();
-      setDocuments(response.documents);
+      const url = searchQuery.trim()
+        ? `${API_BASE}/api/documents/search?q=${encodeURIComponent(searchQuery)}`
+        : null;
+
+      if (url) {
+        const response = await fetch(url);
+        const data = await response.json();
+        setDocuments(data.documents ?? []);
+      } else {
+        const response = await fetchDocuments();
+        setDocuments(response.documents);
+      }
     } catch {
       setErrorMessage("Failed to load documents. Is the backend running?");
     } finally {
       setIsFetching(false);
     }
-  }, []);
+  }, [searchQuery]);
 
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
 
-  const resetMessages = () => setErrorMessage(null);
-
   const handleFileSelection = (file: File | null) => {
-    resetMessages();
+    setErrorMessage(null);
 
     if (!file) {
       setSelectedFile(null);
@@ -79,16 +110,8 @@ export default function KnowledgeBasePage() {
     setSelectedFile(file);
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    handleFileSelection(event.target.files?.[0] ?? null);
-  };
-
-  const handleUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
   const handleUpload = async () => {
-    resetMessages();
+    setErrorMessage(null);
 
     if (!selectedFile) {
       setErrorMessage("Please select a file before uploading.");
@@ -101,9 +124,11 @@ export default function KnowledgeBasePage() {
       const response = await uploadDocument(selectedFile);
       toast.success(`${response.document.filename} processed successfully.`);
       setSelectedFile(null);
+
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+
       await loadDocuments();
     } catch (error) {
       const message =
@@ -115,6 +140,76 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  const handleView = async (document: DocumentSummary) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/documents/${document.id}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.detail?.message ?? "Failed to load document.");
+      }
+
+      setSelectedDocument(data);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to view document.");
+    }
+  };
+
+  const handleDownload = (document: DocumentSummary) => {
+    window.open(`${API_BASE}/api/documents/${document.id}/download`, "_blank");
+  };
+
+  const handleRename = async () => {
+    if (!renameDocument || !renameValue.trim()) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/documents/${renameDocument.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filename: renameValue.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.detail?.message ?? "Rename failed.");
+      }
+
+      toast.success("Document renamed successfully.");
+      setRenameDocument(null);
+      setRenameValue("");
+      await loadDocuments();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Rename failed.");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteDocumentItem) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/documents/${deleteDocumentItem.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.detail?.message ?? "Delete failed.");
+      }
+
+      toast.success("Document deleted successfully.");
+      setDeleteDocumentItem(null);
+      await loadDocuments();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Delete failed.");
+    }
+  };
+
   return (
     <DashboardLayout
       title="Knowledge Hub"
@@ -122,7 +217,7 @@ export default function KnowledgeBasePage() {
     >
       <PageHeader
         title="Knowledge Hub"
-        description="Bring your documents into the platform and turn them into a premium knowledge layer for Alex."
+        description="Upload, search, view, rename, download, and delete documents used by Alex."
       />
 
       {errorMessage && (
@@ -133,140 +228,64 @@ export default function KnowledgeBasePage() {
       )}
 
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-violet-50 via-white to-sky-50">
-            <CardTitle className="text-lg text-slate-950">Upload Documents</CardTitle>
-            <CardDescription>
-              Drag and drop files, or browse your workspace. Supported formats are PDF and TXT.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-5">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_TYPES}
-              className="hidden"
-              aria-hidden
-              onChange={handleFileChange}
-            />
-
-            <motion.div
-              whileHover={{ y: -3, scale: 1.01 }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setIsDragActive(true);
-              }}
-              onDragLeave={() => setIsDragActive(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setIsDragActive(false);
-                handleFileSelection(event.dataTransfer.files?.[0] ?? null);
-              }}
-              onClick={handleUploadClick}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  handleUploadClick();
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              aria-label="Upload documents"
-              className={`flex min-h-[260px] flex-col items-center justify-center rounded-[28px] border border-dashed px-6 py-10 text-center transition-all ${isDragActive ? "border-violet-400 bg-violet-50/70" : "border-slate-200 bg-slate-50/80"}`}
-            >
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-violet-600 to-sky-500 text-white shadow-[0_20px_45px_-20px_rgba(124,58,237,0.7)]">
-                <Upload className="h-7 w-7" />
-              </div>
-              <p className="text-lg font-semibold text-slate-950">Drop files here or browse</p>
-              <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                {selectedFile
-                  ? `Selected: ${selectedFile.name}`
-                  : "PDF or TXT files only. Once uploaded, Alex will prepare them for retrieval."}
-              </p>
-              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-                <Button
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (selectedFile) {
-                      handleUpload();
-                    } else {
-                      handleUploadClick();
-                    }
-                  }}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      {selectedFile ? "Upload File" : "Browse Files"}
-                    </>
-                  )}
-                </Button>
-                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
-                  {selectedFile ? "Ready for upload" : "No file selected"}
-                </div>
-              </div>
-            </motion.div>
-          </CardContent>
-        </Card>
-
+        <UploadZone
+          selectedFile={selectedFile}
+          loading={isLoading}
+          dragActive={isDragActive}
+          setDragActive={setIsDragActive}
+          onFileSelect={handleFileSelection}
+          onUpload={handleUpload}
+        />
+         
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg text-slate-950">Recent Uploads</CardTitle>
-            <CardDescription>Latest documents available for context retrieval.</CardDescription>
+            <CardTitle className="text-lg text-slate-950">Knowledge Stats</CardTitle>
+            <CardDescription>Live document intelligence summary.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {isFetching ? (
-              <div className="flex items-center gap-2 py-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading documents...
-              </div>
-            ) : documents.length === 0 ? (
-              <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50/80 p-5 text-center text-sm text-slate-500">
-                No documents uploaded yet.
-              </div>
-            ) : (
-              documents.slice(0, 4).map((document) => (
-                <div key={document.id || document.filename} className="rounded-[20px] border border-slate-100 bg-slate-50/80 p-3">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm">
-                      <FileText className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">{document.filename}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1">
-                          <Clock3 className="h-3 w-3" />
-                          {document.uploaded_at}
-                        </span>
-                        <span>{document.chunks_created} chunks</span>
-                      </div>
-                    </div>
-                    <div className="mt-1">
-                      {document.status === "Processed" ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      ) : (
-                        <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+
+          <CardContent className="grid gap-3">
+            <div className="rounded-2xl border bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Documents</p>
+              <p className="text-2xl font-bold text-slate-950">{documents.length}</p>
+            </div>
+
+            <div className="rounded-2xl border bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Total Chunks</p>
+              <p className="text-2xl font-bold text-slate-950">
+                {documents.reduce((total, doc) => total + doc.chunks_created, 0)}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Status</p>
+              <p className="text-sm font-semibold text-emerald-600">Ready for retrieval</p>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="text-lg text-slate-950">Uploaded Documents</CardTitle>
-          <CardDescription>Documents stored in the knowledge base with chunk counts.</CardDescription>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="text-lg text-slate-950">Uploaded Documents</CardTitle>
+              <CardDescription>
+                Manage documents stored in the knowledge layer.
+              </CardDescription>
+            </div>
+
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search documents..."
+                className="pl-9"
+              />
+            </div>
+          </div>
         </CardHeader>
+
         <CardContent>
           {isFetching ? (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
@@ -278,23 +297,31 @@ export default function KnowledgeBasePage() {
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
                 <FileText className="h-5 w-5" />
               </div>
-              <p className="text-sm font-medium text-slate-900">No documents uploaded yet.</p>
+              <p className="text-sm font-medium text-slate-900">No documents found.</p>
               <p className="mt-1 max-w-sm text-sm text-slate-500">
-                Upload a PDF or TXT file to add it to your knowledge base.
+                Upload or search for another document.
               </p>
             </div>
           ) : (
             <ul className="grid gap-4 md:grid-cols-2">
               {documents.map((document) => (
-                <li key={document.id || document.filename} className="rounded-[24px] border border-slate-100 bg-slate-50/80 p-4">
+                <li
+                  key={document.id || document.filename}
+                  className="rounded-[24px] border border-slate-100 bg-slate-50/80 p-4"
+                >
                   <div className="flex h-full flex-col justify-between gap-4">
                     <div className="flex items-start gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm">
                         <FileText className="h-5 w-5" />
                       </div>
+
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">{document.filename}</p>
-                        <p className="mt-1 text-xs text-slate-500">Uploaded: {document.uploaded_at}</p>
+                        <p className="truncate text-sm font-semibold text-slate-900">
+                          {document.filename}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Uploaded: {document.uploaded_at}
+                        </p>
                       </div>
                     </div>
 
@@ -304,11 +331,45 @@ export default function KnowledgeBasePage() {
                       </Badge>
                       <Badge variant="outline">{document.file_size_readable}</Badge>
                       <Badge variant="outline">
-                        {document.chunks_created} {document.chunks_created === 1 ? "Chunk" : "Chunks"}
+                        {document.chunks_created}{" "}
+                        {document.chunks_created === 1 ? "Chunk" : "Chunks"}
                       </Badge>
-                      <Badge className={document.status === "Processed" ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}>
+                      <Badge className="bg-emerald-500/10 text-emerald-700">
                         {document.status}
                       </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                      <Button variant="outline" size="sm" onClick={() => handleView(document)}>
+                        <Eye className="h-4 w-4" />
+                        View
+                      </Button>
+
+                      <Button variant="outline" size="sm" onClick={() => handleDownload(document)}>
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setRenameDocument(document);
+                          setRenameValue(document.filename);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Rename
+                      </Button>
+
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeleteDocumentItem(document)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 </li>
@@ -317,6 +378,89 @@ export default function KnowledgeBasePage() {
           )}
         </CardContent>
       </Card>
+
+      {selectedDocument && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="max-h-[85vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-950">
+                  {selectedDocument.document.filename}
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {selectedDocument.document.file_size_readable} •{" "}
+                  {selectedDocument.document.chunks_created} chunks
+                </p>
+              </div>
+
+              <Button variant="ghost" size="sm" onClick={() => setSelectedDocument(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Badge>{selectedDocument.document.file_type}</Badge>
+              <Badge variant="outline">{selectedDocument.document.status}</Badge>
+              <Badge variant="outline">{selectedDocument.chunks.length} chunks loaded</Badge>
+            </div>
+
+            <div className="rounded-2xl border bg-slate-50 p-4">
+              <p className="mb-2 text-sm font-semibold text-slate-900">Preview</p>
+              <pre className="whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                {selectedDocument.preview || "No preview available."}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renameDocument && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-bold text-slate-950">Rename Document</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Enter a new filename. Extension will be preserved.
+            </p>
+
+            <Input
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              className="mt-4"
+            />
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenameDocument(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRename}>Rename</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteDocumentItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-bold text-slate-950">Delete Document?</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              This will permanently delete{" "}
+              <span className="font-semibold text-slate-900">
+                {deleteDocumentItem.filename}
+              </span>{" "}
+              from uploads, metadata, chunks, and vectors.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleteDocumentItem(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDelete}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

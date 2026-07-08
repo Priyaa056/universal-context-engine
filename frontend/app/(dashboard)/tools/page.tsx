@@ -1,3 +1,4 @@
+"use client";
 import { motion } from "framer-motion";
 import { ArrowUpRight, CheckCircle2, Mail, PlugZap, Sparkles, Workflow } from "lucide-react";
 
