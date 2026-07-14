@@ -1,8 +1,11 @@
+from config import get_settings
+
 from rag.embedding_service import EmbeddingService
 from rag.vector_store import VectorStore
 from rag.retriever import SemanticRetriever
 
 from context.context_pipeline import ContextPipeline
+from context.models import ContextChunk
 
 from decision.decision_service import DecisionService
 from decision.intent_classifier import IntentClassifier
@@ -18,11 +21,28 @@ from core.models import WorkflowRequest, WorkflowResponse, WorkflowStatus
 
 
 class AIOrchestrator:
-    def __init__(self, retriever=None, context_pipeline=None, response_service=None):
+    def __init__(
+        self,
+        retriever=None,
+        context_pipeline=None,
+        response_service=None,
+    ):
         if retriever is None:
-            embedding_service = EmbeddingService()
-            vector_store = VectorStore()
-            retriever = SemanticRetriever(embedding_service, vector_store)
+            settings = get_settings()
+
+        embedding_service = EmbeddingService(
+        provider_name=settings.EMBEDDING_PROVIDER,
+        model_name=settings.EMBEDDING_MODEL_NAME,
+        )
+
+        vector_store = VectorStore(
+        persist_directory=settings.CHROMA_PERSIST_DIR,
+        )
+
+        retriever = SemanticRetriever(
+        embedding_service,
+        vector_store,
+        )
 
         self.retriever = retriever
         self.context_pipeline = context_pipeline or ContextPipeline()
@@ -47,29 +67,75 @@ class AIOrchestrator:
         decision = self.decision_service.decide(question)
         route = self.decision_router.route(decision)
 
-        retrieved_chunks = self.retriever.retrieve(question, top_k=5)
-        formatted_context = self.context_pipeline.build(question, retrieved_chunks)
+        retrieved_raw_chunks = self.retriever.retrieve_with_scores(
+            question=question,
+            top_k=5,
+        )
 
-        if route.route == RouteType.ANSWER_PIPELINE:
-            answer = self.response_service.generate(formatted_context)
-            tool_result = None
+        retrieved_chunks: list[ContextChunk] = []
 
-        elif route.route == RouteType.TOOL_PIPELINE:
-            tool_result = self.tool_executor.execute(
-                ToolInput(
-                    tool_type=ToolType.EMAIL,
-                    payload={
-                        "recipient": "demo@example.com",
-                        "subject": "Universal Context Engine Summary",
-                        "body": formatted_context.context_text,
-                    },
+        for chunk in retrieved_raw_chunks:
+            if isinstance(chunk, dict):
+                text = str(
+                    chunk.get("text")
+                    or chunk.get("content")
+                    or ""
+                ).strip()
+
+                if not text:
+                    continue
+
+                retrieved_chunks.append(
+                    ContextChunk(
+                        text=text,
+                        score=float(chunk.get("score", 0.0)),
+                        document_id=str(chunk.get("document_id", "")),
+                        filename=str(
+                            chunk.get("document_name")
+                            or chunk.get("filename")
+                            or "Unknown"
+                        ),
+                        chunk_index=int(chunk.get("chunk_index", 0)),
+                    )
                 )
-            )
-            answer = tool_result.message
 
-        else:
-            answer = f"Route selected: {route.route.value}"
-            tool_result = None
+            else:
+                text = str(getattr(chunk, "text", "")).strip()
+
+                if not text:
+                    continue
+
+                retrieved_chunks.append(
+                    ContextChunk(
+                        text=text,
+                        score=float(getattr(chunk, "score", 0.0)),
+                        document_id=str(
+                            getattr(chunk, "document_id", "")
+                        ),
+                        filename=str(
+                            getattr(
+                                chunk,
+                                "filename",
+                                getattr(chunk, "document_name", "Unknown"),
+                            )
+                        ),
+                        chunk_index=int(
+                            getattr(chunk, "chunk_index", 0)
+                        ),
+                    )
+                )
+
+        print("CHAT DEBUG - retrieved chunks:", len(retrieved_chunks))
+
+        formatted_context = self.context_pipeline.build(
+            question,
+            retrieved_chunks,
+        )
+
+        print(
+            "CHAT DEBUG - context length:",
+            len(formatted_context.context_text),
+        )
 
         return WorkflowResponse(
             status=WorkflowStatus.SUCCESS,

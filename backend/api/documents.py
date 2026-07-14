@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from services.document_service import (
     DocumentProcessingError,
@@ -8,11 +9,35 @@ from services.document_service import (
     get_document_details,
     get_document_file_path,
     list_documents,
+    process_upload,
     rename_document,
-    search_documents,
 )
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
+@router.post("/upload")
+async def upload_document(file: UploadFile = File(...)):
+    try:
+        document = await process_upload(file)
+
+        return {
+            "message": "Document uploaded and processed successfully.",
+            "document": document,
+        }
+
+    except DocumentProcessingError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={
+                "message": exc.message,
+                "details": exc.details,
+            },
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
 
 
 class RenameRequest(BaseModel):

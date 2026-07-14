@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "document_id": "5fc96a49-5fad-4a66-8d0a-3c93aec4305a",
+    "document_name": "Universal Context Engine.pdf",
+    "chunk_index": 0,
+    "content": "Universal Context Engine (UCE) Introduction Universal Context Engine (UCE) is an AI-powered platform designed to understand documents, retrieve knowledge, answer user questions, and execute actions across connected applications. The system combines semantic search, Retrieval-Augmented Generation (RAG), vector databases, and intelligent orchestration to create an interactive AI workspace. The primary AI assistant is named Alex. Alex helps users search knowledge, summarize information, answer questions, and interact with external tools. The system focuses on creating a centralized intelligence layer capable of understanding both structured and unstructured information. System Architecture The architecture consists of several major components. User Interface: \uf0b7 Next.js \uf0b7 TypeScript \uf0b7 Tailwind",
+    "created_at": "11 Jul 2026, 09:39 AM"
+  },
+  {
+    "document_id": "5fc96a49-5fad-4a66-8d0a-3c93aec4305a",
+    "document_name": "Universal Context Engine.pdf",
+    "chunk_index": 1,
+    "content": "architecture consists of several major components. User Interface: \uf0b7 Next.js \uf0b7 TypeScript \uf0b7 Tailwind CSS \uf0b7 Framer Motion Backend: \uf0b7 FastAPI \uf0b7 Python \uf0b7 REST APIs Knowledge Layer: \uf0b7 Document Parser \uf0b7 Text Chunking \uf0b7 Embedding Generation \uf0b7 ChromaDB Vector Database AI Layer: \uf0b7 Semantic Retrieval \uf0b7 Context Pipeline \uf0b7 AI Orchestrator \uf0b7 Response Service Tool Layer: \uf0b7 Email Tool \uf0b7 Task Manager \uf0b7 Future MCP Integrations Backend Technologies The backend is built using FastAPI. FastAPI provides: \uf0b7 High performance \uf0b7 Automatic API documentation \uf0b7 Async request handling \uf0b7 Easy dependency injection \uf0b7 Strong typing Python powers all AI services including embedding generation, semantic retrieval, and orchestration. The backend exposes REST endpoints for document upload, chat, retrieval, and tool execution",
+    "created_at": "11 Jul 2026, 09:39 AM"
+  },
+  {
+    "document_id": "5fc96a49-5fad-4a66-8d0a-3c93aec4305a",
+    "document_name": "Universal Context Engine.pdf",
+    "chunk_index": 2,
+    "content": "tration. The backend exposes REST endpoints for document upload, chat, retrieval, and tool execution. Frontend Technologies The frontend uses: \uf0b7 Next.js \uf0b7 React \uf0b7 TypeScript \uf0b7 Tailwind CSS \uf0b7 shadcn/ui \uf0b7 Framer Motion The interface is designed as an AI Workspace where Alex assists users through conversations, document management, and connected applications. Retrieval Augmented Generation (RAG) The platform uses Retrieval-Augmented Generation. Pipeline: 1. Upload document 2. Extract text 3. Split into chunks 4. Generate embeddings 5. Store embeddings in ChromaDB 6. Perform semantic search 7. Retrieve relevant chunks 8. Build context 9. Generate final response This approach improves factual accuracy by grounding AI responses in uploaded documents. Connected Applications The system supports co",
+    "created_at": "11 Jul 2026, 09:39 AM"
+  },
+  {
+    "document_id": "5fc96a49-5fad-4a66-8d0a-3c93aec4305a",
+    "document_name": "Universal Context Engine.pdf",
+    "chunk_index": 3,
+    "content": "uracy by grounding AI responses in uploaded documents. Connected Applications The system supports connected tools. Current: \uf0b7 Email \uf0b7 Task Manager Future Integrations: \uf0b7 GitHub \uf0b7 Slack \uf0b7 Google Calendar \uf0b7 Notion \uf0b7 WhatsApp \uf0b7 Microsoft Teams The architecture is compatible with the Model Context Protocol (MCP), enabling AI-driven tool execution. Future Roadmap Upcoming improvements include: \uf0b7 Multi-agent collaboration \uf0b7 Multiple LLM providers \uf0b7 API key rotation \uf0b7 Voice interaction \uf0b7 OCR for scanned PDFs \uf0b7 Knowledge graphs \uf0b7 Fine-grained permissions \uf0b7 Multi-user workspaces \uf0b7 Enterprise authentication \uf0b7 Analytics dashboard",
+    "created_at": "11 Jul 2026, 09:39 AM"
+  }
+]

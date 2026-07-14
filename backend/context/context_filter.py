@@ -43,7 +43,11 @@ class ContextFilter:
                 statistics=FilterStatistics(0, 0, 0, 0, 0),
             )
 
-        scored_chunks = [self._normalize_chunk(chunk) for chunk in chunks if self._is_chunk_eligible(chunk)]
+        scored_chunks = [
+        chunk
+        for chunk in chunks
+        if self._is_chunk_eligible(chunk)
+        ]
         chunks_removed_by_score = total_chunks_received - len(scored_chunks)
 
         ordered_chunks = sorted(scored_chunks, key=lambda chunk: chunk.score, reverse=True)
@@ -76,22 +80,14 @@ class ContextFilter:
             ),
         )
 
-    def _normalize_chunk(self, chunk: Dict[str, Any]) -> ContextChunk:
-        metadata = chunk.get("metadata") or {}
-        return ContextChunk(
-            text=str(chunk.get("text") or ""),
-            score=float(chunk.get("score", 0.0) or 0.0),
-            document_id=str(chunk.get("document_id") or metadata.get("document_id", "") or ""),
-            filename=str(chunk.get("filename") or metadata.get("filename", "") or ""),
-            chunk_index=int(chunk.get("chunk_index") if chunk.get("chunk_index") is not None else metadata.get("chunk_index", 0) or 0),
-        )
+    def _normalize_chunk(self, chunk) -> ContextChunk:
+        return chunk
 
-    def _is_chunk_eligible(self, chunk: Dict[str, Any]) -> bool:
-        if not isinstance(chunk, dict):
+    def _is_chunk_eligible(self, chunk) -> bool:
+        if not isinstance(chunk, ContextChunk):
             return False
 
-        score = float(chunk.get("score", 0.0) or 0.0)
-        return score >= self.minimum_score
+        return chunk.score >= self.minimum_score
 
     def _validate_config(self, minimum_score: float, max_chunks: int, max_context_characters: int) -> float:
         if not isinstance(minimum_score, (int, float)):

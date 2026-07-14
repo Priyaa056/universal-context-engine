@@ -225,16 +225,21 @@ def _index_chunks_in_vector_store(
 def list_documents() -> list[DocumentSummary]:
     _ensure_directories()
     documents = _load_json(DOCUMENTS_FILE, [])
+
     return [
         DocumentSummary(
-            id=doc.get("id", doc["filename"]),
-            filename=doc["filename"],
-            file_type=doc["file_type"],
-            file_size=doc.get("file_size", 0),
-            file_size_readable=doc.get("file_size_readable", "0 Bytes"),
-            chunks_created=doc["chunks_created"],
-            uploaded_at=doc.get("uploaded_at", ""),
-            status=doc.get("status", "Processed"),
+            id=str(doc.get("id", doc.get("filename", ""))),
+            filename=str(doc.get("filename", "Unknown")),
+            file_type=str(doc.get("file_type", "")),
+            file_size=int(doc.get("file_size", 0)),
+            file_size_readable=str(
+                doc.get("file_size_readable", "0 Bytes")
+            ),
+            chunks_created=int(doc.get("chunks_created", 0)),
+            indexed_chunks=doc.get("indexed_chunks"),
+            indexing_status=doc.get("indexing_status"),
+            uploaded_at=str(doc.get("uploaded_at", "")),
+            status=str(doc.get("status", "Processed")),
         )
         for doc in documents
     ]

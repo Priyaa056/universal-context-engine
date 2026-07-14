@@ -11,45 +11,33 @@ class ContextBuilder:
     def __init__(self) -> None:
         self._validate_inputs = self._validate_question_and_chunks
 
-    def build(self, question: str, retrieved_chunks: Optional[List[Dict[str, Any]]]) -> ContextObject:
-        self._validate_question_and_chunks(question, retrieved_chunks)
+def build(self, question: str, retrieved_chunks):
+    self._validate_question_and_chunks(question, retrieved_chunks)
 
-        total_chunks_received = len(retrieved_chunks or [])
+    total_chunks_received = len(retrieved_chunks or [])
 
-        normalized_chunks = [normalize_chunk(chunk) for chunk in (retrieved_chunks or [])]
-        unique_chunks = deduplicate_chunks(normalized_chunks)
+    unique_chunks = deduplicate_chunks(retrieved_chunks or [])
 
-        ordered_chunks = sorted(
-            unique_chunks,
-            key=lambda chunk: chunk.get("score", 0.0),
-            reverse=True,
-        )
+    ordered_chunks = sorted(
+        unique_chunks,
+        key=lambda chunk: chunk.score,
+        reverse=True,
+    )
 
-        context_chunks = [
-            ContextChunk(
-                text=chunk.get("text", ""),
-                score=float(chunk.get("score", 0.0) or 0.0),
-                document_id=str(chunk.get("document_id", "") or ""),
-                filename=str(chunk.get("filename", "") or ""),
-                chunk_index=int(chunk.get("chunk_index", 0) or 0),
-            )
-            for chunk in ordered_chunks
-        ]
+    statistics = ContextStatistics(
+        total_chunks_received=total_chunks_received,
+        duplicates_removed=total_chunks_received - len(ordered_chunks),
+        final_chunks=len(ordered_chunks),
+        total_context_characters=sum(len(chunk.text) for chunk in ordered_chunks),
+    )
 
-        statistics = ContextStatistics(
-            total_chunks_received=total_chunks_received,
-            duplicates_removed=total_chunks_received - len(context_chunks),
-            final_chunks=len(context_chunks),
-            total_context_characters=sum(len(chunk.text) for chunk in context_chunks),
-        )
+    return ContextObject(
+        question=question.strip(),
+        chunks=ordered_chunks,
+        statistics=statistics,
+    )
 
-        return ContextObject(
-            question=question.strip(),
-            chunks=context_chunks,
-            statistics=statistics,
-        )
-
-    def _validate_question_and_chunks(self, question: str, retrieved_chunks: Optional[List[Dict[str, Any]]]) -> None:
+def _validate_question_and_chunks(self, question: str, retrieved_chunks: Optional[List[Dict[str, Any]]]) -> None:
         if question is None:
             raise ContextBuilderError("Question cannot be None")
 
