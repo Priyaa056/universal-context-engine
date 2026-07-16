@@ -23,7 +23,7 @@ class FilteredContext:
 class ContextFilter:
     """Filters candidate chunks before they are turned into a final context object."""
 
-    def __init__(self, minimum_score: float = 0.5, max_chunks: int = 5, max_context_characters: int = 4000) -> None:
+    def __init__(self, minimum_score: float = 0.15, max_chunks: int = 5, max_context_characters: int = 4000) -> None:
         self.minimum_score = self._validate_config(minimum_score, max_chunks, max_context_characters)
         self.max_chunks = max_chunks
         self.max_context_characters = max_context_characters

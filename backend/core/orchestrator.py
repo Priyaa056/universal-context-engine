@@ -17,7 +17,11 @@ from mcp.mock_email_tool import MockEmailTool
 from mcp.models import ToolInput, ToolType
 
 from core.response_service import ResponseService
-from core.models import WorkflowRequest, WorkflowResponse, WorkflowStatus
+from core.models import (
+    WorkflowRequest,
+    WorkflowResponse,
+    WorkflowStatus,
+)
 
 
 class AIOrchestrator:
@@ -30,36 +34,46 @@ class AIOrchestrator:
         if retriever is None:
             settings = get_settings()
 
-        embedding_service = EmbeddingService(
-        provider_name=settings.EMBEDDING_PROVIDER,
-        model_name=settings.EMBEDDING_MODEL_NAME,
-        )
+            embedding_service = EmbeddingService(
+                provider_name=settings.EMBEDDING_PROVIDER,
+                model_name=settings.EMBEDDING_MODEL_NAME,
+            )
 
-        vector_store = VectorStore(
-        persist_directory=settings.CHROMA_PERSIST_DIR,
-        )
+            vector_store = VectorStore(
+                persist_directory=settings.CHROMA_PERSIST_DIR,
+            )
 
-        retriever = SemanticRetriever(
-        embedding_service,
-        vector_store,
-        )
+            retriever = SemanticRetriever(
+                embedding_service,
+                vector_store,
+            )
 
         self.retriever = retriever
         self.context_pipeline = context_pipeline or ContextPipeline()
         self.response_service = response_service or ResponseService()
-        self.decision_service = DecisionService(IntentClassifier())
+
+        self.decision_service = DecisionService(
+            IntentClassifier()
+        )
+
         self.decision_router = DecisionRouter()
 
         registry = ToolRegistry()
         registry.register(MockEmailTool())
+
         self.tool_executor = ToolExecutor(registry)
 
-    def run(self, request: WorkflowRequest) -> WorkflowResponse:
+    def run(
+        self,
+        request: WorkflowRequest,
+    ) -> WorkflowResponse:
         if request is None or not request.question.strip():
             return WorkflowResponse(
                 status=WorkflowStatus.NEEDS_CLARIFICATION,
                 answer="Please provide a valid question.",
-                metadata={"reason": "empty_question"},
+                metadata={
+                    "reason": "empty_question",
+                },
             )
 
         question = request.question.strip()
@@ -67,14 +81,21 @@ class AIOrchestrator:
         decision = self.decision_service.decide(question)
         route = self.decision_router.route(decision)
 
-        retrieved_raw_chunks = self.retriever.retrieve_with_scores(
-            question=question,
-            top_k=5,
+        retrieved_raw_chunks = (
+            self.retriever.retrieve_with_scores(
+                question=question,
+                top_k=5,
+            )
         )
 
         retrieved_chunks: list[ContextChunk] = []
 
         for chunk in retrieved_raw_chunks:
+            if isinstance(chunk, ContextChunk):
+                if chunk.text.strip():
+                    retrieved_chunks.append(chunk)
+                continue
+
             if isinstance(chunk, dict):
                 text = str(
                     chunk.get("text")
@@ -88,54 +109,68 @@ class AIOrchestrator:
                 retrieved_chunks.append(
                     ContextChunk(
                         text=text,
-                        score=float(chunk.get("score", 0.0)),
-                        document_id=str(chunk.get("document_id", "")),
+                        score=float(
+                            chunk.get("score", 0.0) or 0.0
+                        ),
+                        document_id=str(
+                            chunk.get("document_id", "") or ""
+                        ),
                         filename=str(
                             chunk.get("document_name")
                             or chunk.get("filename")
                             or "Unknown"
                         ),
-                        chunk_index=int(chunk.get("chunk_index", 0)),
-                    )
-                )
-
-            else:
-                text = str(getattr(chunk, "text", "")).strip()
-
-                if not text:
-                    continue
-
-                retrieved_chunks.append(
-                    ContextChunk(
-                        text=text,
-                        score=float(getattr(chunk, "score", 0.0)),
-                        document_id=str(
-                            getattr(chunk, "document_id", "")
-                        ),
-                        filename=str(
-                            getattr(
-                                chunk,
-                                "filename",
-                                getattr(chunk, "document_name", "Unknown"),
-                            )
-                        ),
                         chunk_index=int(
-                            getattr(chunk, "chunk_index", 0)
+                            chunk.get("chunk_index", 0) or 0
                         ),
                     )
                 )
-
-        print("CHAT DEBUG - retrieved chunks:", len(retrieved_chunks))
 
         formatted_context = self.context_pipeline.build(
             question,
             retrieved_chunks,
         )
 
-        print(
-            "CHAT DEBUG - context length:",
-            len(formatted_context.context_text),
-        )
+        answer = ""
+        tool_result = None
+
+        if route.route == RouteType.ANSWER_PIPELINE:
+            answer = self.response_service.generate(
+                formatted_context
+            )
+
+        elif route.route == RouteType.TOOL_PIPELINE:
+            tool_result = self.tool_executor.execute(
+                ToolInput(
+                    tool_type=ToolType.EMAIL,
+                    payload={
+                        "recipient": "demo@example.com",
+                        "subject": (
+                            "Universal Context Engine Summary"
+                        ),
+                        "body": (
+                            formatted_context.context_text
+                        ),
+                    },
+                )
+            )
+
+            answer = tool_result.message
+
+        else:
+            answer = (
+                "Unable to process the selected route: "
+                f"{route.route.value}"
+            )
+
+        sources = [
+            {
+                "filename": source.filename,
+                "chunk_index": source.chunk_index,
+                "score": source.score,
+            }
+            for source in formatted_context.sources
+        ]
 
         return WorkflowResponse(
             status=WorkflowStatus.SUCCESS,
@@ -144,14 +179,11 @@ class AIOrchestrator:
                 "question": question,
                 "intent": decision.intent.value,
                 "route": route.route.value,
-                "sources": [
-                    {
-                        "filename": source.filename,
-                        "chunk_index": source.chunk_index,
-                        "score": source.score,
-                    }
-                    for source in formatted_context.sources
-                ],
-                "tool_result": tool_result.data if tool_result else None,
+                "sources": sources,
+                "tool_result": (
+                    tool_result.data
+                    if tool_result
+                    else None
+                ),
             },
         )

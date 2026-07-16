@@ -1,43 +1,64 @@
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from .exceptions import ContextBuilderError
 from .models import ContextChunk, ContextObject, ContextStatistics
-from .utils import deduplicate_chunks, normalize_chunk
 
 
 class ContextBuilder:
-    """Builds a structured context object from retrieved chunks without calling any LLM."""
+    """Builds a structured context object from retrieved chunks."""
 
-    def __init__(self) -> None:
-        self._validate_inputs = self._validate_question_and_chunks
+    def build(
+        self,
+        question: str,
+        retrieved_chunks: Optional[List[ContextChunk]],
+    ) -> ContextObject:
+        self._validate_question_and_chunks(question, retrieved_chunks)
 
-def build(self, question: str, retrieved_chunks):
-    self._validate_question_and_chunks(question, retrieved_chunks)
+        chunks = retrieved_chunks or []
+        total_chunks_received = len(chunks)
 
-    total_chunks_received = len(retrieved_chunks or [])
+        unique_chunks: list[ContextChunk] = []
+        seen_keys: set[tuple[str, int, str]] = set()
 
-    unique_chunks = deduplicate_chunks(retrieved_chunks or [])
+        for chunk in chunks:
+            key = (
+                chunk.document_id,
+                chunk.chunk_index,
+                chunk.text.strip(),
+            )
 
-    ordered_chunks = sorted(
-        unique_chunks,
-        key=lambda chunk: chunk.score,
-        reverse=True,
-    )
+            if key in seen_keys:
+                continue
 
-    statistics = ContextStatistics(
-        total_chunks_received=total_chunks_received,
-        duplicates_removed=total_chunks_received - len(ordered_chunks),
-        final_chunks=len(ordered_chunks),
-        total_context_characters=sum(len(chunk.text) for chunk in ordered_chunks),
-    )
+            seen_keys.add(key)
+            unique_chunks.append(chunk)
 
-    return ContextObject(
-        question=question.strip(),
-        chunks=ordered_chunks,
-        statistics=statistics,
-    )
+        ordered_chunks = sorted(
+            unique_chunks,
+            key=lambda chunk: chunk.score,
+            reverse=True,
+        )
 
-def _validate_question_and_chunks(self, question: str, retrieved_chunks: Optional[List[Dict[str, Any]]]) -> None:
+        statistics = ContextStatistics(
+            total_chunks_received=total_chunks_received,
+            duplicates_removed=total_chunks_received - len(ordered_chunks),
+            final_chunks=len(ordered_chunks),
+            total_context_characters=sum(
+                len(chunk.text) for chunk in ordered_chunks
+            ),
+        )
+
+        return ContextObject(
+            question=question.strip(),
+            chunks=ordered_chunks,
+            statistics=statistics,
+        )
+
+    def _validate_question_and_chunks(
+        self,
+        question: str,
+        retrieved_chunks: Optional[List[ContextChunk]],
+    ) -> None:
         if question is None:
             raise ContextBuilderError("Question cannot be None")
 
@@ -45,10 +66,24 @@ def _validate_question_and_chunks(self, question: str, retrieved_chunks: Optiona
             raise ContextBuilderError("Question must be a string")
 
         if not question.strip():
-            raise ContextBuilderError("Question cannot be empty or whitespace-only")
+            raise ContextBuilderError(
+                "Question cannot be empty or whitespace-only"
+            )
 
         if retrieved_chunks is None:
-            raise ContextBuilderError("Retrieved chunks cannot be None")
+            raise ContextBuilderError(
+                "Retrieved chunks cannot be None"
+            )
 
         if not isinstance(retrieved_chunks, list):
-            raise ContextBuilderError("Retrieved chunks must be a list")
+            raise ContextBuilderError(
+                "Retrieved chunks must be a list"
+            )
+
+        if not all(
+            isinstance(chunk, ContextChunk)
+            for chunk in retrieved_chunks
+        ):
+            raise ContextBuilderError(
+                "Every retrieved chunk must be a ContextChunk"
+            )

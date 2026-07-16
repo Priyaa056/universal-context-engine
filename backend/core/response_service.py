@@ -1,25 +1,26 @@
 import os
 
 from dotenv import load_dotenv
-from google import genai
+from openai import OpenAI
 
 from context.models import FormattedContext
 
 
 class ResponseService:
-    def __init__(self, model_name: str | None = None):
+    def __init__(self, model_name: str = "grok-4"):
         load_dotenv()
 
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY is missing")
+        api_key = os.getenv("XAI_API_KEY")
 
-        self.client = genai.Client(api_key=api_key)
-        self.model_name = (
-            model_name
-            or os.getenv("GEMINI_MODEL")
-            or "gemini-2.0-flash"
+        if not api_key:
+            raise ValueError("XAI_API_KEY is missing")
+
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.x.ai/v1",
         )
+
+        self.model_name = model_name
 
     def generate(self, context: FormattedContext) -> str:
         if context is None:
@@ -28,45 +29,45 @@ class ResponseService:
         prompt = self._build_prompt(context)
 
         try:
-            response = self.client.models.generate_content(
+            response = self.client.chat.completions.create(
                 model=self.model_name,
-                contents=prompt,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are Alex, the AI assistant for Universal Context Engine.",
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+                temperature=0.2,
             )
 
-            if response.text:
-                return response.text.strip()
-
-            return "No response was generated."
+            return response.choices[0].message.content
 
         except Exception as exc:
-            print(f"LLM generation failed: {exc}")
+            print(exc)
 
-            retrieved_context = context.context_text.strip()
-
-            if retrieved_context:
+            if context.context_text.strip():
                 return (
-                    "The AI model is temporarily unavailable, but I found "
-                    "relevant information in your uploaded documents:\n\n"
-                    f"{retrieved_context[:2000]}"
+                    "LLM unavailable.\n\n"
+                    + context.context_text[:2000]
                 )
 
-            return (
-                "The AI model is temporarily unavailable, and no relevant "
-                "information was found in the uploaded documents."
-            )
+            return "No relevant information found."
 
     def _build_prompt(self, context: FormattedContext) -> str:
         return f"""
-You are Alex, the assistant for Universal Context Engine.
+Answer ONLY using the uploaded document context.
 
-Answer the user's question using only the supplied document context.
+If the answer is not present, say:
 
-If the answer is not present in the context, respond exactly with:
 "I don't know based on the uploaded documents."
 
-User question:
+Question:
 {context.question}
 
-Uploaded document context:
+Context:
 {context.context_text}
-""".strip()
+"""
