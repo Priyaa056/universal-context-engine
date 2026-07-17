@@ -12,7 +12,7 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${API_BASE_URL}lib/api.ts`, {
+  const response = await fetch(`${API_BASE_URL}/api/documents/upload`,{
     method: "POST",
     body: formData,
   });

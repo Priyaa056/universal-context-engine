@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Bot, Send, Sparkles, User } from "lucide-react";
+import { Bot, Send, Sparkles, User } from "lucide-react";
 
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { PageHeader } from "@/components/ui/page-header";
@@ -39,6 +39,15 @@ interface ChatMessage {
   toolResult?: ToolResult | null;
 }
 
+interface ChatApiResponse {
+  status: string;
+  answer: string;
+  metadata?: {
+    sources?: Source[];
+    tool_result?: ToolResult | null;
+  };
+}
+
 export default function ChatPage() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -48,17 +57,18 @@ export default function ChatPage() {
     event.preventDefault();
 
     const trimmedInput = input.trim();
-    if (!trimmedInput || isLoading) return;
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: trimmedInput,
-      },
-    ]);
+    if (!trimmedInput || isLoading) {
+      return;
+    }
 
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmedInput,
+    };
+
+    setMessages((current) => [...current, userMessage]);
     setInput("");
     setIsLoading(true);
 
@@ -73,38 +83,55 @@ export default function ChatPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as ChatApiResponse | {
+        detail?: string;
+      };
 
       if (!response.ok) {
-        throw new Error(data?.detail || "Backend request failed");
+        const detail =
+          "detail" in data && typeof data.detail === "string"
+            ? data.detail
+            : "Backend request failed";
+
+        throw new Error(detail);
       }
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.answer || "Alex is temporarily unavailable. Please try again shortly.",
-          sources: data.metadata?.sources ?? [],
-          toolResult: data.metadata?.tool_result ?? null,
-        },
-      ]);
-    } catch {
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "⚠ Alex is temporarily unavailable. Knowledge retrieval completed successfully. Please try again shortly.",
-        },
-      ]);
+      const chatData = data as ChatApiResponse;
+
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: chatData.answer,
+        sources: chatData.metadata?.sources ?? [],
+        toolResult: chatData.metadata?.tool_result ?? null,
+      };
+
+      setMessages((previous) => [...previous, assistantMessage]);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to contact Alex.";
+
+      const errorMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: message,
+        sources: [],
+        toolResult: null,
+      };
+
+      setMessages((previous) => [...previous, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <DashboardLayout title="Alex AI" description="Modern conversation, grounded answers, and action-ready insight.">
+    <DashboardLayout
+      title="Alex AI"
+      description="Modern conversation, grounded answers, and action-ready insight."
+    >
       <PageHeader
         title="Alex AI"
         description="Ask about your documents, retrieve context, and trigger action flows through the connected tools."
@@ -112,7 +139,10 @@ export default function ChatPage() {
 
       <Card className="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden">
         <CardHeader className="border-b border-slate-100 bg-gradient-to-r from-violet-50 via-white to-sky-50">
-          <CardTitle className="text-lg text-slate-950">Conversation</CardTitle>
+          <CardTitle className="text-lg text-slate-950">
+            Conversation
+          </CardTitle>
+
           <CardDescription>
             Connected to the Universal Context Engine backend.
           </CardDescription>
@@ -125,9 +155,14 @@ export default function ChatPage() {
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-sky-500 text-white shadow-[0_20px_50px_-25px_rgba(124,58,237,0.75)]">
                   <Bot className="h-6 w-6" />
                 </div>
-                <p className="max-w-md text-base font-semibold text-slate-900">Start a conversation with Alex.</p>
+
+                <p className="max-w-md text-base font-semibold text-slate-900">
+                  Start a conversation with Alex.
+                </p>
+
                 <p className="mt-2 max-w-lg text-sm leading-6 text-slate-500">
-                  Ask about your uploaded documents, or try a richer action like “Draft a follow-up email for this report.”
+                  Ask about your uploaded documents, or try an action such as
+                  “Draft a follow-up email for this report.”
                 </p>
               </div>
             ) : (
@@ -140,7 +175,10 @@ export default function ChatPage() {
                       key={message.id}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}
+                      className={cn(
+                        "flex gap-3",
+                        isUser ? "justify-end" : "justify-start"
+                      )}
                     >
                       {!isUser && (
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-sky-500 text-white shadow-sm">
@@ -148,20 +186,38 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      <div className={cn("max-w-[82%] rounded-[24px] px-4 py-3 text-sm shadow-sm", isUser ? "bg-violet-600 text-white" : "bg-slate-50 text-slate-700") }>
-                        <div className="whitespace-pre-wrap leading-7">{message.content}</div>
+                      <div
+                        className={cn(
+                          "max-w-[82%] rounded-[24px] px-4 py-3 text-sm shadow-sm",
+                          isUser
+                            ? "bg-violet-600 text-white"
+                            : "bg-slate-50 text-slate-700"
+                        )}
+                      >
+                        <div className="whitespace-pre-wrap leading-7">
+                          {message.content}
+                        </div>
 
                         {message.sources && message.sources.length > 0 && (
                           <div className="mt-4 grid gap-2 sm:grid-cols-2">
                             {message.sources.map((source, index) => (
-                              <div key={index} className="rounded-2xl border border-slate-200 bg-white/90 p-3 text-xs text-slate-600">
+                              <div
+                                key={`${source.filename}-${source.chunk_index}-${index}`}
+                                className="rounded-2xl border border-slate-200 bg-white/90 p-3 text-xs text-slate-600"
+                              >
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="font-semibold text-slate-900">{source.filename}</p>
+                                  <p className="truncate font-semibold text-slate-900">
+                                    {source.filename}
+                                  </p>
+
                                   <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700">
                                     {source.score.toFixed(2)}
                                   </span>
                                 </div>
-                                <p className="mt-2 text-slate-500">Chunk {source.chunk_index}</p>
+
+                                <p className="mt-2 text-slate-500">
+                                  Chunk {source.chunk_index}
+                                </p>
                               </div>
                             ))}
                           </div>
@@ -170,16 +226,34 @@ export default function ChatPage() {
                         {message.toolResult && (
                           <div className="mt-4 rounded-[22px] border border-slate-200 bg-white p-4 text-sm text-slate-700">
                             <div className="flex items-center justify-between gap-3">
-                              <p className="font-semibold text-slate-900">Draft Email</p>
+                              <p className="font-semibold text-slate-900">
+                                Draft Email
+                              </p>
+
                               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                                 Editable
                               </span>
                             </div>
+
                             <div className="mt-3 space-y-1 text-sm text-slate-600">
-                              <p><span className="font-medium text-slate-900">To:</span> {message.toolResult.recipient}</p>
-                              <p><span className="font-medium text-slate-900">Subject:</span> {message.toolResult.subject}</p>
+                              <p>
+                                <span className="font-medium text-slate-900">
+                                  To:
+                                </span>{" "}
+                                {message.toolResult.recipient}
+                              </p>
+
+                              <p>
+                                <span className="font-medium text-slate-900">
+                                  Subject:
+                                </span>{" "}
+                                {message.toolResult.subject}
+                              </p>
                             </div>
-                            <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">{message.toolResult.body}</p>
+
+                            <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">
+                              {message.toolResult.body}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -198,6 +272,7 @@ export default function ChatPage() {
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-sky-500 text-white shadow-sm">
                       <Bot className="h-5 w-5" />
                     </div>
+
                     <div className="rounded-[24px] bg-slate-50 px-4 py-3 text-sm text-slate-600">
                       <div className="flex items-center gap-2">
                         <Sparkles className="h-4 w-4 animate-pulse text-violet-600" />
@@ -210,7 +285,10 @@ export default function ChatPage() {
             )}
           </ScrollArea>
 
-          <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-slate-100 bg-white/80 p-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex items-center gap-2 border-t border-slate-100 bg-white/80 p-4"
+          >
             <Input
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -219,7 +297,13 @@ export default function ChatPage() {
               disabled={isLoading}
               className="h-12 rounded-full border-slate-200 bg-slate-50 px-4"
             />
-            <Button type="submit" aria-label="Send message" disabled={isLoading} className="h-12 rounded-full px-5">
+
+            <Button
+              type="submit"
+              aria-label="Send message"
+              disabled={isLoading || !input.trim()}
+              className="h-12 rounded-full px-5"
+            >
               <Send className="h-4 w-4" />
             </Button>
           </form>
