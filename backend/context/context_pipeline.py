@@ -23,7 +23,7 @@ class ContextPipeline:
 
     def __init__(self):
         self.builder = ContextBuilder()
-        self.filter = ContextFilter()
+        self.filter = ContextFilter(minimum_score=0.25)
         self.ranker = RankingService(SimilarityRankingStrategy())
         self.formatter = ContextFormatter()
 
@@ -31,13 +31,15 @@ class ContextPipeline:
         """
         Builds formatted context from retrieved chunks.
 
-        NOTE:
-        Retriever integration will be added in the next step.
+        Accepts raw dicts (flat or with nested metadata) or ContextChunk
+        objects — normalisation is handled by the ContextBuilder.
         """
 
+        # builder normalises dicts → ContextChunk and deduplicates
         context = self.builder.build(question, retrieved_chunks)
 
-        filtered = self.filter.filter(retrieved_chunks)
+        # filter operates on the already-normalised ContextChunks
+        filtered = self.filter.filter(context.chunks)
 
         ranked = self.ranker.rank(
             [
@@ -54,4 +56,4 @@ class ContextPipeline:
 
         formatted = self.formatter.format(ranked)
 
-        return formatted
+        return formatted

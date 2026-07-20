@@ -28,6 +28,12 @@ class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
     # ------------------------------------------------------------------
+    # LLM Provider Configuration
+    # ------------------------------------------------------------------
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "groq")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    # ------------------------------------------------------------------
     # Embedding layer (Phase 3 — Module 1)
     # ------------------------------------------------------------------
     # The provider name must match a key in embedding_factory._PROVIDER_REGISTRY.

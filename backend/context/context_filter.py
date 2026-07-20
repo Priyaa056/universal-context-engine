@@ -50,7 +50,12 @@ class ContextFilter:
         ]
         chunks_removed_by_score = total_chunks_received - len(scored_chunks)
 
-        ordered_chunks = sorted(scored_chunks, key=lambda chunk: chunk.score, reverse=True)
+        # Normalise to ContextChunk for downstream processing
+        ordered_chunks = sorted(
+            [self._normalise(c) for c in scored_chunks],
+            key=lambda chunk: chunk.score,
+            reverse=True,
+        )
         selected_chunks: List[ContextChunk] = []
         total_characters = 0
         chunks_removed_by_limit = 0
@@ -80,14 +85,43 @@ class ContextFilter:
             ),
         )
 
-    def _normalize_chunk(self, chunk) -> ContextChunk:
-        return chunk
+    def _normalise(self, chunk) -> ContextChunk:
+        """Convert a ContextChunk or dict into a ContextChunk."""
+        if isinstance(chunk, ContextChunk):
+            return chunk
+
+        meta = chunk.get("metadata") or {}
+        return ContextChunk(
+            text=str(chunk.get("text") or chunk.get("content") or "").strip(),
+            score=float(chunk.get("score", 0.0) or 0.0),
+            document_id=str(
+                chunk.get("document_id") or meta.get("document_id") or ""
+            ),
+            filename=str(
+                chunk.get("filename")
+                or chunk.get("document_name")
+                or meta.get("filename")
+                or "Unknown"
+            ),
+            chunk_index=int(
+                chunk.get("chunk_index")
+                if chunk.get("chunk_index") is not None
+                else meta.get("chunk_index", 0)
+            ),
+        )
 
     def _is_chunk_eligible(self, chunk) -> bool:
-        if not isinstance(chunk, ContextChunk):
-            return False
+        """Return True if chunk meets the minimum score threshold.
 
-        return chunk.score >= self.minimum_score
+        Accepts both ContextChunk objects and plain dicts.
+        """
+        if isinstance(chunk, ContextChunk):
+            return chunk.score >= self.minimum_score
+
+        if isinstance(chunk, dict):
+            return float(chunk.get("score", 0.0) or 0.0) >= self.minimum_score
+
+        return False
 
     def _validate_config(self, minimum_score: float, max_chunks: int, max_context_characters: int) -> float:
         if not isinstance(minimum_score, (int, float)):

@@ -81,12 +81,18 @@ class AIOrchestrator:
         decision = self.decision_service.decide(question)
         route = self.decision_router.route(decision)
 
-        retrieved_raw_chunks = (
-            self.retriever.retrieve_with_scores(
+        # Prefer retrieve_with_scores(); fall back to retrieve() for test
+        # doubles or older retrievers that don't implement it.
+        if hasattr(self.retriever, "retrieve_with_scores"):
+            retrieved_raw_chunks = self.retriever.retrieve_with_scores(
                 question=question,
                 top_k=5,
             )
-        )
+        else:
+            retrieved_raw_chunks = self.retriever.retrieve(
+                question=question,
+                top_k=5,
+            )
 
         retrieved_chunks: list[ContextChunk] = []
 
